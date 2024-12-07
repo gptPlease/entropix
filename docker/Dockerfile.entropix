@@ -23,21 +23,40 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
-# Instructions from README.md
-RUN curl -sSL https://install.python-poetry.org | python3.12 -
+# Install Rust for tiktoken
 RUN curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 
-RUN --mount=type=secret,id=ssh_key,mode=0400 \
-    --mount=type=secret,id=known_hosts \
-    mkdir -p /root/.ssh && \
-    cp /run/secrets/known_hosts /root/.ssh/known_hosts && \
-    GIT_SSH_COMMAND='ssh -i /run/secrets/ssh_key' git clone git@github.com:xjdr-alt/entropix.git /app
+# install poetry
+RUN --mount=type=cache,target=/root/.cache/pip curl -sSL https://install.python-poetry.org | python3 -
+
+# Add Rust and Poetry to PATH
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
+    
+# RUN --mount=type=secret,id=ssh_key,mode=0400 \
+#     --mount=type=secret,id=known_hosts \
+#     mkdir -p /root/.ssh && \
+#     cp /run/secrets/known_hosts /root/.ssh/known_hosts && \
+#     GIT_SSH_COMMAND='ssh -i /run/secrets/ssh_key' git clone git@github.com:xjdr-alt/entropix.git /app
 WORKDIR /app
-RUN --mount=type=secret,id=hf_token \
-    export HF_TOKEN=$(cat /run/secrets/hf_token) && \
+# RUN --mount=type=secret,id=hf_token \
+#     export HF_TOKEN=$(cat /run/secrets/hf_token) && \
+#     poetry env use python3.12 && \
+#     poetry install && \
+#     poetry run huggingface-cli login --token $HF_TOKEN
+
+# COPY . /app/
+
+# poetry install
+COPY --chown=$UID:$GID ./pyproject.toml ./pyproject.toml
+COPY --chown=$UID:$GID ./poetry.lock ./poetry.lock
+RUN --mount=type=cache,target=/root/.cache/pip \
     poetry env use python3.12 && \
-    poetry install && \
-    poetry run huggingface-cli login --token $HF_TOKEN
+    poetry lock --no-update && \
+    poetry install --no-root 
+
+# RUN poetry env use python3.12 && \
+#     poetry lock && \
+#     poetry install
 
 ENTRYPOINT ["/bin/bash"]
